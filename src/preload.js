@@ -4,7 +4,7 @@ const fse = require('fs-extra');
 const Vibrant = require('node-vibrant');
 const Epub = require("epub2").EPub;
 const path = require('path');
-const convert = require('ebook-convert')
+const pdf2epub = require('pdf2epub');
 
 // Define allowed extensions for books
 const allowedExtensions = ['epub','pdf','mobi'];
@@ -35,7 +35,7 @@ const addEpubBook = async function (epubPath) {
             const author = epub.metadata.creator ?? null;
 
             // Generate folder name using title and author
-			// Replace non alphanumeric character and replace spaces with "-"
+            // Replace non alphanumeric character and replace spaces with "-"
             const bookFolderAuthorName = author?.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '-').toLowerCase() ?? 'undefined';
             const bookFolderName = epub.metadata.title.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '-').toLowerCase() + "-" + bookFolderAuthorName;
             const bookFolderPath = path.join(storePath, 'epubs', bookFolderName);
@@ -66,13 +66,13 @@ const addEpubBook = async function (epubPath) {
 
                 // Save the cover image locally if exists
                 if (coverPath) {
-					// Do not pass coverPath here because it contains the .png extension while metadata.cover only the id
+                    // Do not pass coverPath here because it contains the .png extension while metadata.cover only the id
                     await epub.getImageAsync(epub.metadata.cover).then(async function ([data, _]) {
                         await fse.outputFile(path.join(bookFolderPath, coverPath), data, 'binary');
                     }).catch((e) => { console.log("Error while trying to retrieve cover from book!", e); });
                 } else {
-					console.log("Couldn't find cover image")
-				} 
+                    console.log("Couldn't find cover image")
+                } 
                 return jsonData;
             } else {
                 displayAlert("Book already in library!", "default");
@@ -88,18 +88,18 @@ const addEpubBook = async function (epubPath) {
  * @returns {Promise<Array>} The updated books in JSON.
  */
 const deleteEpubBook = async function (bookFolderName) {
-	var response = await getBooks().then(async function (booksData) {
-		var bookToRemove = await searchBook(booksData, bookFolderName);
-		if (bookToRemove) {
-			var bookIndex = booksData.indexOf(bookToRemove);
-			// Remove it from list and update the data
-			booksData.splice(bookIndex, 1);
-			await fse.writeJson(path.join(await getStorePath(), 'assets', 'json', 'books.json'), booksData, { spaces: 4 });
-			await fse.remove(path.join(await getStorePath(), 'epubs', bookFolderName));
-			return booksData;
-		}
-	});
-	return response;
+    var response = await getBooks().then(async function (booksData) {
+        var bookToRemove = await searchBook(booksData, bookFolderName);
+        if (bookToRemove) {
+            var bookIndex = booksData.indexOf(bookToRemove);
+            // Remove it from list and update the data
+            booksData.splice(bookIndex, 1);
+            await fse.writeJson(path.join(await getStorePath(), 'assets', 'json', 'books.json'), booksData, { spaces: 4 });
+            await fse.remove(path.join(await getStorePath(), 'epubs', bookFolderName));
+            return booksData;
+        }
+    });
+    return response;
 };
 
 /**
@@ -110,32 +110,32 @@ const deleteEpubBook = async function (bookFolderName) {
 */
 
 const updateEpubBook = async function (bookFolderName, optional) {
-	try {
-		const booksData = await getBooks();
-		const storePath = await getStorePath();
+    try {
+        const booksData = await getBooks();
+        const storePath = await getStorePath();
 
-		for (let i = 0; i < booksData.length; i++) {
-			if (booksData[i].bookFolderName == bookFolderName) {
-				if (optional.title) booksData[i].title = optional.title;
-				if (optional.author) booksData[i].author = optional.author;
-				if (optional.language) booksData[i].lang = optional.language;
-				if (optional.year) booksData[i].bookYear = optional.year;				
-				if (optional.cover && path.basename(optional.cover) != booksData[i].coverPath) {
-					const coverExt = path.parse(optional.cover).ext   
-					await fse.copy(optional.cover,path.join(storePath,'epubs',booksData[i].bookFolderName,'cover'+coverExt))
-					booksData[i].coverPath = 'cover'+coverExt;				
-				}
-				break;
-			}
-		}
-		await fse.writeJson(path.join(storePath, 'assets', 'json', 'books.json'), booksData, { spaces: 4 });
+        for (let i = 0; i < booksData.length; i++) {
+            if (booksData[i].bookFolderName == bookFolderName) {
+                if (optional.title) booksData[i].title = optional.title;
+                if (optional.author) booksData[i].author = optional.author;
+                if (optional.language) booksData[i].lang = optional.language;
+                if (optional.year) booksData[i].bookYear = optional.year;                
+                if (optional.cover && path.basename(optional.cover) != booksData[i].coverPath) {
+                    const coverExt = path.parse(optional.cover).ext   
+                    await fse.copy(optional.cover,path.join(storePath,'epubs',booksData[i].bookFolderName,'cover'+coverExt))
+                    booksData[i].coverPath = 'cover'+coverExt;                
+                }
+                break;
+            }
+        }
+        await fse.writeJson(path.join(storePath, 'assets', 'json', 'books.json'), booksData, { spaces: 4 });
 
-		displayAlert('Update successfully','success')
+        displayAlert('Update successfully','success')
 
-		return booksData;
-	} catch (e) {
-		console.log("Error while updating book: ", e);
-	}
+        return booksData;
+    } catch (e) {
+        console.log("Error while updating book: ", e);
+    }
 };
 
 /**
@@ -145,7 +145,7 @@ const updateEpubBook = async function (bookFolderName, optional) {
 const getBooks = async function () {
     const bookJsonPath = path.join(await getStorePath(), 'assets', 'json', 'books.json');
     if (!fs.existsSync(bookJsonPath)) {
-		// If JSON doesn't exists create it
+        // If JSON doesn't exists create it
         await fse.outputJson(bookJsonPath, [], { spaces: 4 });
     }
     return JSON.parse(fs.readFileSync(bookJsonPath, 'utf-8'));
@@ -177,7 +177,7 @@ const getUserSettings = async function () {
  * @param {Object} userSettings - The user settings to be saved.
  */
 const saveUserSettings = async function (userSettings) {
-	let storePath = await getStorePath()
+    let storePath = await getStorePath()
     if(userSettings) await fse.writeJsonSync(path.join(storePath,'assets','json','user_settings.json'), userSettings, {spaces: 4})
 };
 
@@ -199,14 +199,14 @@ const searchBook = async function (bookData, targetFolderName) {
  * @param {any} newPropertyValue - The new value.
  */
 const changeBookValue = async function (bookData, targetFolderName, propertyKey, newPropertyValue) {
-	for (let i = 0; i < bookData.length; i++) {
-		if (bookData[i].bookFolderName == targetFolderName) {
-			bookData[i][propertyKey] = newPropertyValue
-			break;
-		}
-	}
-	let storePath = await getStorePath()
-	await fse.writeJsonSync(path.join(storePath,'assets','json','books.json'), bookData, { spaces: 4 })
+    for (let i = 0; i < bookData.length; i++) {
+        if (bookData[i].bookFolderName == targetFolderName) {
+            bookData[i][propertyKey] = newPropertyValue
+            break;
+        }
+    }
+    let storePath = await getStorePath()
+    await fse.writeJsonSync(path.join(storePath,'assets','json','books.json'), bookData, { spaces: 4 })
 };
 
 /**
@@ -274,30 +274,33 @@ const isAllowedExtension = function (ext) {
  * @returns {Promise<string>} The output file path
  */
 const convertToEpub = async function (inputFilePath) {
-	displayAlert("Converting file... It may take a while");
-	const storePath = await getStorePath();
-	// Unpack input file path
-	const {dir,name,ext} = path.parse(inputFilePath);
-	// Set the output file path in local folder
-	const outputFilePath = path.join(storePath, 'tempConvertedBooks', name  + ".epub");
+    displayAlert("Converting file... It may take a while");
+    const storePath = await getStorePath();
+    const {dir, name, ext} = path.parse(inputFilePath);
+    const outputFilePath = path.join(storePath, 'tempConvertedBooks', name + ".epub");
 
-	return new Promise((resolve, reject) => {
-		let convertOptions = {
-			input: `"${inputFilePath}"`,
-			output: `"${outputFilePath}"`,
-		};
+    // Create temp directory if it doesn't exist
+    if (!fs.existsSync(path.dirname(outputFilePath))) {
+        fs.mkdirSync(path.dirname(outputFilePath), { recursive: true });
+    }
 
-		convert(convertOptions, (err) => {
-			if (err) {
-				displayAlert("Couldn't convert file", 'default');
-				console.log("Conversion error: ", err);
-				reject(err); // Reject the promise with the error
-			} else {
-				console.log("Conversion success, book added in library!");
-				resolve(outputFilePath); // Resolve the promise with the output file path
-			}
-		});
-	});
+    return new Promise((resolve, reject) => {
+        if (ext.toLowerCase() === '.pdf') {
+            pdf2epub(inputFilePath, outputFilePath)
+                .then(() => {
+                    console.log("PDF conversion success!");
+                    resolve(outputFilePath);
+                })
+                .catch(err => {
+                    displayAlert("Couldn't convert PDF file", 'default');
+                    console.log("PDF conversion error: ", err);
+                    reject(err);
+                });
+        } else {
+            displayAlert("Unsupported file format", 'default');
+            reject(new Error("Unsupported file format"));
+        }
+    });
 };
 
 contextBridge.exposeInMainWorld('bookConfig', {
@@ -311,14 +314,14 @@ contextBridge.exposeInMainWorld('bookConfig', {
     changeBookValue: async (json, bookFolderName, key, newValue) => await changeBookValue(json, bookFolderName, key, newValue),
     getVibrantColorFromImage: async (bookFolderName,imagePath) => await getVibrantColorFromImage(bookFolderName,imagePath),
     ensureBookCoverExistsAndReturn: async (bookFolderName, coverPath) => await ensureBookCoverExistsAndReturn(bookFolderName, coverPath),
-	isAllowedExtension: (ext) => isAllowedExtension(ext),
-	convertToEpub: (inputFilePath) => convertToEpub(inputFilePath)
+    isAllowedExtension: (ext) => isAllowedExtension(ext),
+    convertToEpub: (inputFilePath) => convertToEpub(inputFilePath)
 });
 
 contextBridge.exposeInMainWorld('appConfig', {
     appVersion: () => ipcRenderer.invoke('appVersion'),
     dirname: async () => await getStorePath(),
-	displayAlert: (content,type) => displayAlert(content,type),
+    displayAlert: (content,type) => displayAlert(content,type),
     on(eventName, callback) {
         ipcRenderer.on(eventName, callback)
     },

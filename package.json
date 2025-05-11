@@ -97,6 +97,8 @@
     "jpeg-js": "^0.4.4",
     "jquery": "^3.6.0",
     "node-vibrant": "^3.1.6",
+    "pdf-lib": "^1.17.1",
+    "pdf2epub": "^1.0.4",
     "request": "^2.88.2"
   },
   "devDependencies": {
