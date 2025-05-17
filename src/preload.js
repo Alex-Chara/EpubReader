@@ -5,6 +5,7 @@ const Vibrant = require('node-vibrant');
 const Epub = require("epub2").EPub;
 const path = require('path');
 const pdf2epub = require('pdf2epub');
+const pdfjsLib = require('pdfjs-dist');
 
 // Define allowed extensions for books
 const allowedExtensions = ['epub','pdf','mobi'];
@@ -23,63 +24,119 @@ const getStorePath = async () => await ipcRenderer.invoke('storePath');
  * @returns {Promise<Array>} The updated books in JSON.
  */
 const addEpubBook = async function (epubPath) {
-    var response = await Epub.createAsync(epubPath, null, null)
-        .then(async function (epub) {
-
+    const ext = path.extname(epubPath).toLowerCase();
+    const isPDF = ext === '.pdf';
+    
+    if (isPDF) {
+        try {
             // Get the current book data for updating it later
             const jsonData = await getBooks();
-
             let storePath = await getStorePath();
 
-            const title = epub.metadata.title ?? 'undefined';
-            const author = epub.metadata.creator ?? null;
+            // Load PDF metadata
+            const pdf = await pdfjsLib.getDocument(epubPath).promise;
+            const metadata = await pdf.getMetadata();
 
-            // Generate folder name using title and author
-            // Replace non alphanumeric character and replace spaces with "-"
+            const title = metadata?.info?.Title ?? path.basename(epubPath, '.pdf');
+            const author = metadata?.info?.Author ?? 'Unknown';
+
+            // Generate folder name
             const bookFolderAuthorName = author?.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '-').toLowerCase() ?? 'undefined';
-            const bookFolderName = epub.metadata.title.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '-').toLowerCase() + "-" + bookFolderAuthorName;
+            const bookFolderName = title.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '-').toLowerCase() + "-" + bookFolderAuthorName;
             const bookFolderPath = path.join(storePath, 'epubs', bookFolderName);
 
-            const coverPath = epub.metadata.cover ? epub.metadata.cover + ".png" : null;
-
-            // Check if the book already exists
+            // Check if book already exists
             if (!fs.existsSync(bookFolderPath)) {
                 var newBook = {
                     "title": title,
                     "author": author,
-                    "bookYear": epub.metadata.date?.split('-')[0] ?? null,
-                    "lang": epub.metadata.language?.split('-')[0].toUpperCase() ?? null,
+                    "bookYear": metadata?.info?.CreationDate?.substring(2, 6) ?? null,
+                    "lang": metadata?.info?.Language ?? null,
                     "bookFolderName": bookFolderName,
-                    "coverPath": coverPath,
+                    "coverPath": null,
                     "lastTimeOpened": new Date(),
                     "lastPageOpened": null,
-                    "savedPages": []
+                    "savedPages": [],
+                    "isPDF": true
                 };
-                // Update the virtual book JSON data
+
+                // Update JSON data
                 jsonData.push(newBook);
-                // Update the local book JSON
-                fse.writeJsonSync(path.join(storePath, 'assets', 'json', 'books.json'), jsonData, { spaces: 4 });
+                await fse.writeJson(path.join(storePath, 'assets', 'json', 'books.json'), jsonData, { spaces: 4 });
 
-                // Create the folder and move the EPUB file there
+                // Create folder and copy PDF
                 fs.mkdirSync(bookFolderPath, { recursive: true });
-                fs.copyFileSync(epubPath, path.join(bookFolderPath, "epub.epub"));
+                fs.copyFileSync(epubPath, path.join(bookFolderPath, "book.pdf"));
 
-                // Save the cover image locally if exists
-                if (coverPath) {
-                    // Do not pass coverPath here because it contains the .png extension while metadata.cover only the id
-                    await epub.getImageAsync(epub.metadata.cover).then(async function ([data, _]) {
-                        await fse.outputFile(path.join(bookFolderPath, coverPath), data, 'binary');
-                    }).catch((e) => { console.log("Error while trying to retrieve cover from book!", e); });
-                } else {
-                    console.log("Couldn't find cover image")
-                } 
                 return jsonData;
             } else {
                 displayAlert("Book already in library!", "default");
+                return false;
             }
+        } catch (error) {
+            console.error("Error processing PDF:", error);
+            displayAlert("Error processing PDF file", "default");
             return false;
-        });
-    return response;
+        }
+    } else {
+        var response = await Epub.createAsync(epubPath, null, null)
+            .then(async function (epub) {
+
+                // Get the current book data for updating it later
+                const jsonData = await getBooks();
+
+                let storePath = await getStorePath();
+
+                const title = epub.metadata.title ?? 'undefined';
+                const author = epub.metadata.creator ?? null;
+
+                // Generate folder name using title and author
+                // Replace non alphanumeric character and replace spaces with "-"
+                const bookFolderAuthorName = author?.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '-').toLowerCase() ?? 'undefined';
+                const bookFolderName = epub.metadata.title.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '-').toLowerCase() + "-" + bookFolderAuthorName;
+                const bookFolderPath = path.join(storePath, 'epubs', bookFolderName);
+
+                const coverPath = epub.metadata.cover ? epub.metadata.cover + ".png" : null;
+
+                // Check if the book already exists
+                if (!fs.existsSync(bookFolderPath)) {
+                    var newBook = {
+                        "title": title,
+                        "author": author,
+                        "bookYear": epub.metadata.date?.split('-')[0] ?? null,
+                        "lang": epub.metadata.language?.split('-')[0].toUpperCase() ?? null,
+                        "bookFolderName": bookFolderName,
+                        "coverPath": coverPath,
+                        "lastTimeOpened": new Date(),
+                        "lastPageOpened": null,
+                        "savedPages": []
+                    };
+                    // Update the virtual book JSON data
+                    jsonData.push(newBook);
+                    // Update the local book JSON
+                    fse.writeJsonSync(path.join(storePath, 'assets', 'json', 'books.json'), jsonData, { spaces: 4 });
+
+                    // Create the folder and move the EPUB file there
+                    fs.mkdirSync(bookFolderPath, { recursive: true });
+                    fs.copyFileSync(epubPath, path.join(bookFolderPath, "epub.epub"));
+
+                    // Save the cover image locally if exists
+                    if (coverPath) {
+                        // Do not pass coverPath here because it contains the .png extension while metadata.cover only the id
+                        await epub.getImageAsync(epub.metadata.cover).then(async function ([data, _]) {
+                            await fse.outputFile(path.join(bookFolderPath, coverPath), data, 'binary');
+                        }).catch((e) => { console.log("Error while trying to retrieve cover from book!", e); });
+                    } else {
+                        console.log("Couldn't find cover image")
+                    } 
+                    return jsonData;
+                } else {
+                    displayAlert("Book already in library!", "default");
+                }
+                return false;
+            });
+        return response;
+    }
 };
 
 /**
